@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read/write their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Admins can read/write everything, students can only read quizzes
+    match /quizzes/{quizId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      match /questions/{questionId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+    }
+    
+    // Quiz results - users can only access their own results, admins can access all
+    match /results/{resultId} {
+      allow read, write: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+  }
+}
