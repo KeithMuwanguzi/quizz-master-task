@@ -1,16 +1,20 @@
-import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 
-class AuthService extends ChangeNotifier {
+class AuthController extends GetxController {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
-  UserModel? _user;
-  UserModel? get user => _user;
+  final Rx<UserModel?> _user = Rx<UserModel?>(null);
+  UserModel? get user => _user.value;
+  
+  final RxBool isLoading = false.obs;
 
-  AuthService() {
+  @override
+  void onInit() {
+    super.onInit();
     _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
@@ -18,16 +22,16 @@ class AuthService extends ChangeNotifier {
     if (firebaseUser != null) {
       final userDoc = await _firestore.collection('users').doc(firebaseUser.uid).get();
       if (userDoc.exists) {
-        _user = UserModel.fromMap(userDoc.data()!);
+        _user.value = UserModel.fromMap(userDoc.data()!);
       }
     } else {
-      _user = null;
+      _user.value = null;
     }
-    notifyListeners();
   }
 
   Future<String?> signUp(String email, String password, String name) async {
     try {
+      isLoading.value = true;
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -42,21 +46,25 @@ class AuthService extends ChangeNotifier {
         );
         
         await _firestore.collection('users').doc(credential.user!.uid).set(userModel.toMap());
-        _user = userModel;
-        notifyListeners();
+        _user.value = userModel;
       }
       return null;
     } catch (e) {
       return e.toString();
+    } finally {
+      isLoading.value = false;
     }
   }
 
   Future<String?> signIn(String email, String password) async {
     try {
+      isLoading.value = true;
       await _auth.signInWithEmailAndPassword(email: email, password: password);
       return null;
     } catch (e) {
       return e.toString();
+    } finally {
+      isLoading.value = false;
     }
   }
 

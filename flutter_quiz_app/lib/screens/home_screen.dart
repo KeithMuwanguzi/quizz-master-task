@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import 'quiz_list_screen.dart';
@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authService = Provider.of<AuthService>(context);
+    final AuthController authController = Get.find<AuthController>();
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -61,13 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: const Color(0xFF6366F1),
-                      child: Text(
-                        authService.user?.name.substring(0, 1).toUpperCase() ?? 'U',
+                      child: Obx(() => Text(
+                        authController.user?.name.substring(0, 1).toUpperCase() ?? 'U',
                         style: GoogleFonts.inter(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
-                      ),
+                      )),
                     ),
                     const SizedBox(width: 8),
                     const Icon(
@@ -84,27 +84,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Hello, ${authService.user?.name}',
+                      Obx(() => Text(
+                        'Hello, ${authController.user?.name}',
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w600,
                           color: const Color(0xFF1F2937),
                         ),
-                      ),
-                      Text(
-                        authService.user?.email ?? '',
+                      )),
+                      Obx(() => Text(
+                        authController.user?.email ?? '',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           color: const Color(0xFF6B7280),
                         ),
-                      ),
+                      )),
                     ],
                   ),
                 ),
                 const PopupMenuDivider(),
                 PopupMenuItem<String>(
                   value: 'logout',
-                  onTap: () => authService.signOut(),
+                  onTap: () => authController.signOut(),
                   child: Row(
                     children: [
                       const Icon(Icons.logout, color: Colors.red, size: 20),

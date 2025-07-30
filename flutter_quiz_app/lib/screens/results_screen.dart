@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../services/auth_service.dart';
@@ -29,17 +29,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
       _isLoading = true;
     });
 
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final quizService = Provider.of<QuizService>(context, listen: false);
+    final authController = Get.find<AuthController>();
+    final quizController = Get.find<QuizController>();
     
-    if (authService.user != null) {
-      final results = await quizService.getUserResults(authService.user!.uid);
+    if (authController.user != null) {
+      final results = await quizController.getUserResults(authController.user!.uid);
       
       // Load quiz details for each result
       Map<String, QuizModel> quizMap = {};
       for (var result in results) {
         if (!quizMap.containsKey(result.quizId)) {
-          final quiz = await quizService.getQuiz(result.quizId);
+          final quiz = await quizController.getQuiz(result.quizId);
           if (quiz != null) {
             quizMap[result.quizId] = quiz;
           }

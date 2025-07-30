@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/quiz_model.dart';
 import '../services/auth_service.dart';
@@ -18,6 +18,8 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   int _currentQuestionIndex = 0;
   List<int> _selectedAnswers = [];
   bool _isCompleted = false;
+  bool _isCheckingEligibility = true;
+  bool _canTakeQuiz = false;
   late AnimationController _progressController;
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
@@ -25,6 +27,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _checkQuizEligibility();
     _selectedAnswers = List.filled(widget.quiz.questions.length, -1);
     _progressController = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -45,8 +48,45 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     _slideController.forward();
   }
 
+  Future<void> _checkQuizEligibility() async {
+    final authController = Get.find<AuthController>();
+    final quizController = Get.find<QuizController>();
+    
+    if (authController.user != null) {
+      final canTake = await quizController.canUserTakeQuiz(
+        authController.user!.uid, 
+        widget.quiz.id
+      );
+      
+      setState(() {
+        _canTakeQuiz = canTake;
+        _isCheckingEligibility = false;
+      });
+      
+      if (!canTake) {
+        // Show dialog and navigate back
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showAlreadyCompletedDialog();
+        });
+      }
+    } else {
+      setState(() {
+        _canTakeQuiz = false;
+        _isCheckingEligibility = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingEligibility) {
+      return _buildLoadingScreen();
+    }
+
+    if (!_canTakeQuiz) {
+      return _buildNotEligibleScreen();
+    }
+
     if (_isCompleted) {
       return _buildResultScreen();
     }
@@ -308,7 +348,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _completeQuiz() {
+  Future<void> _completeQuiz() async {
     int score = 0;
     for (int i = 0; i < widget.quiz.questions.length; i++) {
       if (_selectedAnswers[i] == widget.quiz.questions[i].correctAnswer) {
@@ -316,23 +356,29 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       }
     }
 
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final quizService = Provider.of<QuizService>(context, listen: false);
+    final authController = Get.find<AuthController>();
+    final quizController = Get.find<QuizController>();
 
     final result = QuizResultModel(
       id: '',
-      userId: authService.user!.uid,
+      userId: authController.user!.uid,
       quizId: widget.quiz.id,
       score: score,
       totalQuestions: widget.quiz.questions.length,
       completedAt: DateTime.now(),
     );
 
-    quizService.submitQuizResult(result);
-
-    setState(() {
-      _isCompleted = true;
-    });
+    // Submit result and check if successful
+    final success = await quizController.submitQuizResult(result);
+    
+    if (success) {
+      setState(() {
+        _isCompleted = true;
+      });
+    } else {
+      // If submission failed (e.g., already completed), navigate back
+      Get.back();
+    }
   }
 
   void _showExitDialog() {
@@ -501,6 +547,139 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        title: Text(
+          'Loading Quiz...',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF6366F1),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotEligibleScreen() {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        title: Text(
+          'Quiz Not Available',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Icon(
+                  Icons.block,
+                  size: 80,
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Quiz Already Completed',
+                style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1F2937),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'You have already completed this quiz. Each quiz can only be taken once.',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: const Color(0xFF6B7280),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Get.back(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Back to Quiz List',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAlreadyCompletedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning, color: Colors.orange),
+            const SizedBox(width: 8),
+            Text(
+              'Quiz Already Completed',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        content: Text(
+          'You have already completed "${widget.quiz.title}". Each quiz can only be taken once.',
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Get.back(); // Go back to quiz list
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+            ),
+            child: Text('OK', style: GoogleFonts.inter()),
+          ),
+        ],
       ),
     );
   }

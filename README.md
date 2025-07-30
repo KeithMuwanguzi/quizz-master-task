@@ -21,18 +21,14 @@ A complete educational platform with a Flutter mobile app for students and a Nex
 - Create and manage quizzes
 - Add/edit questions
 - View student results and analytics
+- Create users 
 
 ### Firebase Integration
 - Authentication for both students and admins
 - Firestore database for quizzes, questions, and results
 - Real-time data synchronization
 
-## Setup Instructions
 
-1. Set up Firebase project
-2. Configure Flutter app with Firebase
-3. Configure Next.js admin panel with Firebase
-4. Deploy Firebase security rules
 
 ## Tech Stack
 
@@ -40,3 +36,8 @@ A complete educational platform with a Flutter mobile app for students and a Nex
 - **Admin Panel**: Next.js 14 (TypeScript)
 - **Backend**: Firebase (Auth + Firestore)
 - **Styling**: Tailwind CSS (Admin Panel)
+
+
+INITIAL LOGIN CREDENTIALS - FOR INTIAL LOGIN CREDENTIALS ON ADMIN PORTAL,
+email :testadmin@quizz.master
+password:adminpassword

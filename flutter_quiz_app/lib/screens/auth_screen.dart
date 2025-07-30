@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 
@@ -16,9 +16,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   
-  bool _isLogin = true;
-  bool _isLoading = false;
   bool _obscurePassword = true;
+  final AuthController _authController = Get.find<AuthController>();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -97,7 +96,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _isLogin ? 'Welcome back!' : 'Create your account',
+                            'Welcome back!',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               color: const Color(0xFF6B7280),
@@ -105,24 +104,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 32),
                           
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            child: Column(
-                              children: [
-                                if (!_isLogin) ...[
-                                  _buildTextField(
-                                    controller: _nameController,
-                                    label: 'Full Name',
-                                    icon: Icons.person_outline,
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please enter your name';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 20),
-                                ],
+                          Column(
+                            children: [
                                 
                                 _buildTextField(
                                   controller: _emailController,
@@ -167,16 +150,15 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                                     return null;
                                   },
                                 ),
-                              ],
-                            ),
+                            ],
                           ),
                           const SizedBox(height: 32),
                           
                           SizedBox(
                             width: double.infinity,
                             height: 56,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleAuth,
+                            child: Obx(() => ElevatedButton(
+                              onPressed: _authController.isLoading.value ? null : _handleAuth,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF6366F1),
                                 foregroundColor: Colors.white,
@@ -185,7 +167,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                                 ),
                                 elevation: 0,
                               ),
-                              child: _isLoading
+                              child: _authController.isLoading.value
                                   ? const SizedBox(
                                       height: 20,
                                       width: 20,
@@ -195,42 +177,23 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                                       ),
                                     )
                                   : Text(
-                                      _isLogin ? 'Sign In' : 'Create Account',
+                                      'Sign In',
                                       style: GoogleFonts.inter(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                            ),
+                            )),
                           ),
                           const SizedBox(height: 24),
                           
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                _isLogin
-                                    ? 'Don\'t have an account? '
-                                    : 'Already have an account? ',
-                                style: GoogleFonts.inter(
-                                  color: const Color(0xFF6B7280),
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _isLogin = !_isLogin;
-                                  });
-                                },
-                                child: Text(
-                                  _isLogin ? 'Sign Up' : 'Sign In',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFF6366F1),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          Text(
+                            'Contact your administrator to create an account',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF6B7280),
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),
@@ -294,40 +257,19 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Future<void> _handleAuth() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    // Only login is allowed - signup is disabled
+    String? error = await _authController.signIn(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
-    final authService = Provider.of<AuthService>(context, listen: false);
-    String? error;
-
-    if (_isLogin) {
-      error = await authService.signIn(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
-    } else {
-      error = await authService.signUp(
-        _emailController.text.trim(),
-        _passwordController.text,
-        _nameController.text.trim(),
-      );
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+    if (error != null) {
+      Get.snackbar(
+        'Error',
+        error,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
       );
     }
   }

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../services/quiz_service.dart';
 import '../services/auth_service.dart';
 import '../models/quiz_model.dart';
-import 'quiz_screen.dart';
 
 class QuizListScreen extends StatefulWidget {
   const QuizListScreen({super.key});
@@ -15,9 +14,11 @@ class QuizListScreen extends StatefulWidget {
 }
 
 class _QuizListScreenState extends State<QuizListScreen> {
-  bool _isLoading = true;
-  Map<String, bool> _quizCompletionStatus = {};
-  Map<String, QuizResultModel?> _quizResults = {};
+  final QuizController _quizController = Get.find<QuizController>();
+  final AuthController _authController = Get.find<AuthController>();
+  
+  final Map<String, bool> _quizCompletionStatus = {};
+  final Map<String, QuizResultModel?> _quizResults = {};
 
   @override
   void initState() {
@@ -26,58 +27,46 @@ class _QuizListScreenState extends State<QuizListScreen> {
   }
 
   Future<void> _loadQuizzes() async {
-    setState(() {
-      _isLoading = true;
-    });
+    await _quizController.loadQuizzes();
     
-    final quizService = Provider.of<QuizService>(context, listen: false);
-    final authService = Provider.of<AuthService>(context, listen: false);
-    
-    await quizService.loadQuizzes();
-    
-    if (authService.user != null) {
+    if (_authController.user != null) {
       // Check completion status for each quiz
-      for (var quiz in quizService.quizzes) {
-        final hasCompleted = await quizService.hasUserTakenQuiz(authService.user!.uid, quiz.id);
-        final result = await quizService.getUserQuizResult(authService.user!.uid, quiz.id);
+      for (var quiz in _quizController.quizzes) {
+        final hasCompleted = await _quizController.hasUserTakenQuiz(_authController.user!.uid, quiz.id);
+        final result = await _quizController.getUserQuizResult(_authController.user!.uid, quiz.id);
         _quizCompletionStatus[quiz.id] = hasCompleted;
         _quizResults[quiz.id] = result;
       }
+      setState(() {}); // Update UI after loading completion status
     }
-    
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<QuizService>(
-      builder: (context, quizService, child) {
-        if (_isLoading) {
-          return _buildShimmerLoading();
-        }
+    return Obx(() {
+      if (_quizController.isLoading.value) {
+        return _buildShimmerLoading();
+      }
 
-        if (quizService.quizzes.isEmpty) {
-          return _buildEmptyState();
-        }
+      if (_quizController.quizzes.isEmpty) {
+        return _buildEmptyState();
+      }
 
-        return RefreshIndicator(
-          onRefresh: _loadQuizzes,
-          color: const Color(0xFF6366F1),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: quizService.quizzes.length,
-            itemBuilder: (context, index) {
-              final quiz = quizService.quizzes[index];
-              final isCompleted = _quizCompletionStatus[quiz.id] ?? false;
-              final result = _quizResults[quiz.id];
-              return _buildQuizCard(context, quiz, index, isCompleted, result);
-            },
-          ),
-        );
-      },
-    );
+      return RefreshIndicator(
+        onRefresh: _loadQuizzes,
+        color: const Color(0xFF6366F1),
+        child: ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: _quizController.quizzes.length,
+          itemBuilder: (context, index) {
+            final quiz = _quizController.quizzes[index];
+            final isCompleted = _quizCompletionStatus[quiz.id] ?? false;
+            final result = _quizResults[quiz.id];
+            return _buildQuizCard(context, quiz, index, isCompleted, result);
+          },
+        ),
+      );
+    });
   }
 
   Widget _buildShimmerLoading() {
@@ -167,12 +156,7 @@ class _QuizListScreenState extends State<QuizListScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: isCompleted ? () => _showCompletedQuizDialog(context, quiz, result) : () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => QuizScreen(quiz: quiz),
-              ),
-            );
+            Get.toNamed('/quiz', arguments: quiz);
           },
           borderRadius: BorderRadius.circular(16),
           child: Container(

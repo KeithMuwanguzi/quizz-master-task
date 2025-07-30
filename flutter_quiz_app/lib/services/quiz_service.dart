@@ -1,22 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/quiz_model.dart';
 
-class QuizService extends ChangeNotifier {
+class QuizController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  List<QuizModel> _quizzes = [];
+  final RxList<QuizModel> _quizzes = <QuizModel>[].obs;
   List<QuizModel> get quizzes => _quizzes;
+  
+  final RxBool isLoading = false.obs;
+
+  /// Check if user can take a quiz (hasn't taken it before)
+  Future<bool> canUserTakeQuiz(String userId, String quizId) async {
+    try {
+      final hasCompleted = await hasUserTakenQuiz(userId, quizId);
+      return !hasCompleted;
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to check quiz eligibility: $e');
+      return false;
+    }
+  }
 
   Future<void> loadQuizzes() async {
     try {
+      isLoading.value = true;
       final snapshot = await _firestore.collection('quizzes').get();
-      _quizzes = snapshot.docs
+      _quizzes.value = snapshot.docs
           .map((doc) => QuizModel.fromMap(doc.data(), doc.id))
           .toList();
-      notifyListeners();
     } catch (e) {
-      print('Error loading quizzes: $e');
+      Get.snackbar('Error', 'Failed to load quizzes: $e');
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -27,32 +43,78 @@ class QuizService extends ChangeNotifier {
         return QuizModel.fromMap(doc.data()!, doc.id);
       }
     } catch (e) {
-      print('Error getting quiz: $e');
+      Get.snackbar('Error', 'Failed to get quiz: $e');
     }
     return null;
   }
 
-  Future<void> submitQuizResult(QuizResultModel result) async {
+  Future<bool> submitQuizResult(QuizResultModel result) async {
     try {
+      // First check if user has already taken this quiz
+      final existingResult = await hasUserTakenQuiz(result.userId, result.quizId);
+      if (existingResult) {
+        Get.snackbar(
+          'Error', 
+          'You have already completed this quiz. Each quiz can only be taken once.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return false;
+      }
+
+      // Submit the result
       await _firestore.collection('results').add(result.toMap());
+      Get.snackbar(
+        'Success', 
+        'Quiz result submitted successfully!',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+      return true;
     } catch (e) {
-      print('Error submitting quiz result: $e');
+      Get.snackbar(
+        'Error', 
+        'Failed to submit quiz result: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
     }
   }
 
   Future<List<QuizResultModel>> getUserResults(String userId) async {
     try {
-      final snapshot = await _firestore
-          .collection('results')
-          .where('userId', isEqualTo: userId)
-          .orderBy('completedAt', descending: true)
-          .get();
+      // Try server-side sorting first (requires index)
+      try {
+        final snapshot = await _firestore
+            .collection('results')
+            .where('userId', isEqualTo: userId)
+            .orderBy('completedAt', descending: true)
+            .get();
 
-      return snapshot.docs
-          .map((doc) => QuizResultModel.fromMap(doc.data(), doc.id))
-          .toList();
+        return snapshot.docs
+            .map((doc) => QuizResultModel.fromMap(doc.data(), doc.id))
+            .toList();
+      } catch (indexError) {
+        // Fallback to client-side sorting if index doesn't exist
+        print('Index not available, using client-side sorting: $indexError');
+        
+        final snapshot = await _firestore
+            .collection('results')
+            .where('userId', isEqualTo: userId)
+            .get();
+
+        final results = snapshot.docs
+            .map((doc) => QuizResultModel.fromMap(doc.data(), doc.id))
+            .toList();
+        
+        // Sort by completedAt in descending order (most recent first)
+        results.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+        
+        return results;
+      }
     } catch (e) {
-      print('Error getting user results: $e');
+      Get.snackbar('Error', 'Failed to get user results: $e');
       return [];
     }
   }
@@ -68,7 +130,7 @@ class QuizService extends ChangeNotifier {
 
       return snapshot.docs.isNotEmpty;
     } catch (e) {
-      print('Error checking quiz completion: $e');
+      Get.snackbar('Error', 'Failed to check quiz completion: $e');
       return false;
     }
   }
@@ -89,7 +151,7 @@ class QuizService extends ChangeNotifier {
       }
       return null;
     } catch (e) {
-      print('Error getting user quiz result: $e');
+      Get.snackbar('Error', 'Failed to get user quiz result: $e');
       return null;
     }
   }

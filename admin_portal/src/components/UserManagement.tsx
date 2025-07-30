@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { User } from '@/lib/types';
 import { UserPlus, Trash2, Edit, Users, Shield, GraduationCap } from 'lucide-react';
+import UserMigration from './UserMigration';
 
 interface UserManagementProps {
     currentUser: User;
@@ -32,7 +33,7 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
             const usersSnapshot = await getDocs(collection(db, 'users'));
             const usersData = usersSnapshot.docs.map(doc => ({
                 ...doc.data(),
-                uid: doc.id
+                uid: doc.id // Document ID is the UID
             })) as User[];
             setUsers(usersData);
         } catch (error) {
@@ -54,8 +55,8 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
                 formData.password
             );
 
-            // Save user data to Firestore
-            await addDoc(collection(db, 'users'), {
+            // Save user data to Firestore using UID as document ID
+            await setDoc(doc(db, 'users', userCredential.user.uid), {
                 uid: userCredential.user.uid,
                 email: formData.email,
                 name: formData.name,
@@ -114,6 +115,7 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
 
         setLoading(true);
         try {
+            // Delete from Firestore using UID as document ID
             await deleteDoc(doc(db, 'users', user.uid));
             await fetchUsers();
             alert('User deleted successfully!');
@@ -168,6 +170,11 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
                     <UserPlus size={20} />
                     Create User
                 </button>
+            </div>
+
+            {/* User Migration Section */}
+            <div className="mb-6">
+                <UserMigration />
             </div>
 
             {/* Stats Cards */}
